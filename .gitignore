@@ -1,6 +1,9 @@
 # Datos crudos (shapefiles > 100 MB, se descargan de BA Data; ver README)
 datasets/
 
+# Material de la cátedra (de terceros, solo de consulta)
+clases/
+
 # Entorno virtual
 .venv/
 
