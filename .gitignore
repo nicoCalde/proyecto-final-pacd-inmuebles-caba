@@ -13,3 +13,4 @@ __pycache__/
 
 # Configuración local de Claude Code
 .claude/settings.local.json
+CLAUDE.local.md

@@ -26,6 +26,8 @@ Development follows an approved, staged implementation plan with a TDD cycle (Re
 
 ## Methodological decisions (approved)
 
+`docs/decisiones.md` is the decision log, written in Spanish. Each decision gets one row with its reason. Add a row whenever a new decision is made.
+
 - **Target**: a value segment from the **terciles of `PRECIOUSDM`** (USD per m²): Accesible / Estándar / Alta. The tercile thresholds are fitted **on the train split only**.
 - **No leakage**: no price-derived column may be used as a feature. That rules out `PRECIOUSD`, `PRECIOARS`, `PRECIOUSDM`, `PRECIOARSM` and `CAMBIO`. A test enforces this.
 - **Models**: `LogisticRegression` and `RandomForestClassifier`, tuned with `GridSearchCV`, `StratifiedKFold(5)`, `scoring="f1_macro"` and `random_state=42`.
@@ -78,13 +80,3 @@ Read the `.dbf` attribute table with `pyshp` (the `shapefile` module).
   - Docstrings use the **numpydoc** convention.
   - Tooling is `black`, `flake8`, `flake8-docstrings`, `pep8-naming` and `pytest`.
 - Code size targets: units of about 15 statements or fewer, McCabe complexity of about 5 or less, and about 5 parameters or fewer per function. No magic values: constants belong in `config`.
-
-## Git identity
-
-The global git config belongs to the user's **work** account. This repo must use the **personal** account, so it overrides the identity with local config only:
-
-- `user.name=nicoCalde`
-- `user.email=ncalderon@prestonv.com`
-- `origin` is `git@github-prestonv:nicoCalde/proyecto-final-pacd-inmuebles-caba.git`
-
-`github-prestonv` is an SSH alias in `~/.ssh/config` with `IdentitiesOnly yes`. Never switch the remote to HTTPS, and never use `gh` here: both are authenticated as the work account. Never modify the global git config.
