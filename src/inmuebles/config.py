@@ -165,3 +165,10 @@ CLEAN_COLUMNS = (
     "preciousd",
     TARGET_SOURCE,
 )
+
+# Variable objetivo: segmento de valor por terciles del precio en USD por m²
+TARGET_COLUMN = "segmento"
+# Etiquetas ordenadas de menor a mayor valor
+SEGMENT_LABELS = ("Accesible", "Estándar", "Alta")
+# Cuantiles que separan los segmentos (terciles), ajustados solo sobre train
+SEGMENT_QUANTILES = (1 / 3, 2 / 3)

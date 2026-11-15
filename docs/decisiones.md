@@ -35,6 +35,9 @@
 | --- | --- |
 | Target: segmento de valor por terciles de USD/m² (Accesible / Estándar / Alta) | Las clases quedan balanceadas. El USD/m² permite comparar departamentos de distinto tamaño. |
 | Umbrales de los terciles calculados solo con train | Evita que el conjunto de test influya en la definición de las clases. |
+| Un precio igual a un umbral va a la clase superior | La regla de borde queda explícita y es reproducible. |
+| Guardar los umbrales aprendidos para registrarlos en la base de datos | La definición de cada clase queda auditable: se sabe exactamente qué USD/m² separa cada segmento. |
+| El etiquetador del target queda fuera del `Pipeline` de scikit-learn | Transforma la variable objetivo, no las features, y el `Pipeline` solo procesa las features. |
 | Excluir las columnas de precio como features | El target se deriva del precio. Usarlo como feature sería hacer trampa (*data leakage*). |
 | LogisticRegression vs RandomForest | La consigna pide al menos dos modelos: uno lineal simple y uno no lineal. |
 | GridSearchCV con F1 macro y validación cruzada estratificada de 5 folds | F1 macro pesa igual a todas las clases. La estratificación mantiene la proporción de clases en cada fold. |
