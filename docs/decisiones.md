@@ -10,6 +10,10 @@
 | Descartar 2017 y 2020 | A 2017 le faltan variables. 2020 tiene un esquema distinto. |
 | No versionar `datasets/` | Los `.dbf` superan los 100 MB que acepta GitHub. Los datos limpios se entregan en la base de datos. |
 | Borrar los datos SGR (Opción C) | Pertenecían a otra opción de la consigna. |
+| Leer solo la tabla `.dbf` de cada shapefile, con pyshp y en UTF-8 | Contiene todos los atributos. Las geometrías no hacen falta porque ya están latitud y longitud. pyshp es liviano, comparado con alternativas geoespaciales pesadas. |
+| Mapeo explícito año → archivo en `config` | Es más robusto que deducir el año del nombre del archivo, que no sigue un formato uniforme. |
+| Unificar los nombres de columna entre 2018 y 2019 (`ANTIG_`, `BARRIO_1`/`BARRIOS_1`, `COMUNA_1`/`COMUNAS`) | Ambos años describen las mismas variables con nombres distintos. Hay que unificarlos para poder unir las tablas. |
+| Descartar la columna `AGE` de 2019 | Solo existe en 2019 y no se puede completar para 2018. |
 
 ## Metodología
 
