@@ -31,7 +31,7 @@
 | Python 3.12 en un entorno virtual con uv | Versión estable con soporte completo de todas las librerías del proyecto. El entorno virtual aísla las dependencias y permite reproducir la instalación en cualquier máquina. |
 | Mínimos de `requirements.txt` iguales a las versiones probadas | pandas 3 cambia comportamientos. Con estos mínimos, el revisor obtiene los mismos resultados. |
 | Código en `src/inmuebles/` con un módulo por responsabilidad | Organización modular, evaluada en la rúbrica. |
-| TDD con pytest (tests primero) | Se pidió en el plan. Garantiza que cada etapa funcione antes de avanzar. |
+| TDD con pytest, ciclo Red → Implementation → Green | **Red:** se escribe primero un test que falla, y así se comprueba que detecta la falta del comportamiento. **Implementation:** se escribe el código mínimo para cumplirlo. **Green:** se confirma que pasa sin romper lo anterior. Así cada requisito queda expresado como algo verificable, los tests prueban lo que el código debe hacer y no solo lo que ya hace, y forman una red de seguridad contra regresiones en las etapas siguientes. |
 | black y flake8 (con docstrings y naming) | Estándar definido por el equipo para cumplir PEP 8, que exige la rúbrica. black formatea el código y flake8 verifica automáticamente el estilo, los docstrings y los nombres. |
 | `pyproject.toml` y `.flake8` | Configuración de pytest y black, y de flake8, que no lee `pyproject.toml`. |
 | Entregables en español | La consigna, la cursada y la defensa son en español. De no ser así, irían en inglés, que es la convención en el desarrollo de software. |
