@@ -33,6 +33,33 @@ Development follows an approved, staged implementation plan with a TDD cycle (Re
 - **Models**: `LogisticRegression` and `RandomForestClassifier`, tuned with `GridSearchCV`, `StratifiedKFold(5)`, `scoring="f1_macro"` and `random_state=42`.
 - **DB**: SQLite through the stdlib `sqlite3` plus `pandas.to_sql`/`read_sql`. The schema is explicit DDL with PK and FK constraints and `PRAGMA foreign_keys=ON`. Writes are idempotent and run inside transactions. No ORM, and no `SELECT *` in production code.
 
+## Course alignment (adopted)
+
+The class material in `clases/` is git-ignored and serves as reference only. A review against it added these requirements to the remaining stages:
+
+- **Modeling** (classes M3-2 and M3-3):
+  - Use `DummyClassifier(strategy="most_frequent")` as the baseline.
+  - The 80/20 train/test split is stratified by an auxiliary price bin, because the target only exists after the split.
+  - Assert that `X` and `y` have the same number of rows.
+  - Run GridSearchCV with several scorers and `refit="f1_macro"`.
+  - Choose the model by the mean CV score and store mean ± std across folds.
+  - Touch the test set only once, at the end.
+  - Save the best pipeline with joblib.
+  - Plot LogisticRegression coefficients and RandomForest importances, with a note that they do not imply causality.
+- **Logging** (class M4-1):
+  - Scripts configure a console handler plus a file handler under `logs/`, with the format `asctime name levelname message`.
+  - Use at least three levels: INFO for progress, WARNING for discarded or masked data, ERROR for missing inputs.
+- **DB** (class M5-2): after loading, validate the expected columns and that row counts match the source DataFrame. Tables carry a `run_id`.
+- **Charts** (class M5-3 and the SWD guide):
+  - Pick the chart by the question it answers. No correlation heatmap; use a scatter plot instead.
+  - Titles state the takeaway, not the topic.
+  - Bar axes start at 0, with value labels.
+  - Each segment keeps the same color everywhere.
+  - Every chart carries one finding and one limitation.
+- **Deck**: 7 slides, from the question through data, target and leakage, models, results, interpretation, to conclusion, limitations and next steps.
+- **Git**: merge PRs with a merge commit, not squash, so the granular history stays visible.
+- **README**: install instructions for both `python -m venv` + `pip` and `uv`.
+
 ## Planned layout
 
 The layout is planned, not built yet. Create each piece only in its stage.
