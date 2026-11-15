@@ -1,3 +1,6 @@
+# Datos crudos (shapefiles > 100 MB, se descargan de BA Data; ver README)
+datasets/
+
 # Entorno virtual
 .venv/
 
