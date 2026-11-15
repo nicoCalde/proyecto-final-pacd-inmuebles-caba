@@ -1,0 +1,7 @@
+[flake8]
+max-line-length = 88
+# Compatibilidad con black
+extend-ignore = E203, W503
+docstring-convention = numpy
+max-complexity = 5
+exclude = .venv,.git,__pycache__,datasets

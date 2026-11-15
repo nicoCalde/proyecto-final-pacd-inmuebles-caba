@@ -1,0 +1,23 @@
+# Versiones mínimas = versiones con las que se desarrolló y probó el proyecto
+# (Python 3.12).
+
+# --- Datos y análisis ---
+pandas>=3.1
+numpy>=2.5
+
+# --- Modelado ---
+scikit-learn>=1.9
+
+# --- Visualización ---
+matplotlib>=3.11
+seaborn>=0.13
+
+# --- Lectura de shapefiles (tabla de atributos .dbf) ---
+pyshp>=3.1
+
+# --- Desarrollo: pruebas y estilo ---
+pytest>=9.2
+black>=26.10
+flake8>=7.5
+flake8-docstrings>=1.7
+pep8-naming>=0.15
