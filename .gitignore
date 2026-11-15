@@ -1,0 +1,12 @@
+# Entorno virtual
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Caches de herramientas
+.pytest_cache/
+
+# Configuración local de Claude Code
+.claude/settings.local.json
