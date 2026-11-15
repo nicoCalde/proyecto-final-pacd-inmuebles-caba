@@ -58,3 +58,110 @@ RAW_COLUMNS = (
 
 # Columna con el año de publicación de cada aviso
 YEAR_COLUMN = "anio"
+
+# Filtro de avisos: solo ventas ("VTA") de departamentos ("DTO")
+SALE_OPERATION = "VTA"
+APARTMENT_TYPE = "DTO"
+
+# Etiquetas de antigüedad que indican un inmueble nuevo (antigüedad 0)
+ANTIG_NEW_LABELS = ("A ESTRENAR", "PRE-VENTA")
+
+# Los 48 barrios oficiales de CABA, con la grafía del dataset
+CABA_BARRIOS = (
+    "AGRONOMIA",
+    "ALMAGRO",
+    "BALVANERA",
+    "BARRACAS",
+    "BELGRANO",
+    "BOCA",
+    "BOEDO",
+    "CABALLITO",
+    "CHACARITA",
+    "COGHLAN",
+    "COLEGIALES",
+    "CONSTITUCION",
+    "FLORES",
+    "FLORESTA",
+    "LINIERS",
+    "MATADEROS",
+    "MONTE CASTRO",
+    "MONTSERRAT",
+    "NUEVA POMPEYA",
+    "NUÑEZ",
+    "PALERMO",
+    "PARQUE AVELLANEDA",
+    "PARQUE CHACABUCO",
+    "PARQUE CHAS",
+    "PARQUE PATRICIOS",
+    "PATERNAL",
+    "PUERTO MADERO",
+    "RECOLETA",
+    "RETIRO",
+    "SAAVEDRA",
+    "SAN CRISTOBAL",
+    "SAN NICOLAS",
+    "SAN TELMO",
+    "VELEZ SARSFIELD",
+    "VERSALLES",
+    "VILLA CRESPO",
+    "VILLA DEL PARQUE",
+    "VILLA DEVOTO",
+    "VILLA GRAL. MITRE",
+    "VILLA LUGANO",
+    "VILLA LURO",
+    "VILLA ORTUZAR",
+    "VILLA PUEYRREDON",
+    "VILLA REAL",
+    "VILLA RIACHUELO",
+    "VILLA SANTA RITA",
+    "VILLA SOLDATI",
+    "VILLA URQUIZA",
+)
+
+# Subdivisiones no oficiales que se unifican con su barrio oficial
+BARRIO_ALIASES = {
+    "BARRACAS ESTE": "BARRACAS",
+    "BARRACAS OESTE": "BARRACAS",
+    "FLORES NORTE": "FLORES",
+    "FLORES SUR": "FLORES",
+    "VILLA DEVOTO NORTE": "VILLA DEVOTO",
+    "VILLA DEVOTO SUR": "VILLA DEVOTO",
+}
+
+# Rangos plausibles (inclusivos); los valores fuera de rango pasan a NaN
+VALID_RANGES = {
+    "antig": (0, 150),
+    "m2total": (10, 2000),
+    "m2cub": (10, 2000),
+    "ambientes": (1, 15),
+    "banos": (1, 10),
+    "latitud": (-34.71, -34.52),
+    "longitud": (-58.54, -58.33),
+    "comuna": (1, 15),
+}
+
+# Cuantiles (inclusivos) del precio por m² fuera de los cuales se descarta
+PRICE_QUANTILES = (0.01, 0.99)
+
+# Columna de la que se derivará la variable objetivo: precio en USD por m²
+TARGET_SOURCE = "preciousdm"
+
+# Identificador secuencial de cada aviso limpio
+ID_COLUMN = "id_propiedad"
+
+# Columnas de la tabla limpia, en orden
+CLEAN_COLUMNS = (
+    ID_COLUMN,
+    YEAR_COLUMN,
+    "barrio",
+    "comuna",
+    "antig",
+    "m2total",
+    "m2cub",
+    "ambientes",
+    "banos",
+    "latitud",
+    "longitud",
+    "preciousd",
+    TARGET_SOURCE,
+)

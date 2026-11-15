@@ -1,12 +1,16 @@
-"""Fixtures compartidas: shapefiles diminutos que imitan los esquemas reales.
+"""Fixtures compartidas: shapefiles diminutos y tablas crudas sintéticas.
 
 Las pruebas nunca leen ``datasets/``; en su lugar se escriben con pyshp
 shapefiles de puntos con pocas filas en el directorio temporal de cada prueba.
 Los esquemas copian el orden, los tipos y los tamaños de los ``.dbf`` reales.
+Para la limpieza se arman en memoria tablas con la forma de ``load_raw``.
 """
 
+import pandas as pd
 import pytest
 import shapefile
+
+from inmuebles.config import RAW_COLUMNS, YEAR_COLUMN
 
 # Esquema real 2018: ANTIG_ y CAMBIO como texto, BARRIO_1 y COMUNA_1 al final.
 SCHEMA_2018 = (
@@ -114,5 +118,47 @@ def make_dbf(tmp_path):
             [schema[i] for i in keep],
             [[row[i] for i in keep] for row in rows],
         )
+
+    return _make
+
+
+# Fila cruda válida por defecto, con la forma de la salida de ``load_raw``.
+RAW_DEFAULTS = {
+    "operacion": "VTA",
+    "tipo": "DTO",
+    "antig": 10.0,
+    "m2total": 60.0,
+    "m2cub": 55.0,
+    "ambientes": 2.0,
+    "banos": 1.0,
+    "direccion": None,
+    "cambio": "28.5",
+    "preciousd": 150000.0,
+    "precioars": 4275000.0,
+    "preciousdm": 2500.0,
+    "precioarsm": 71250.0,
+    "latitud": -34.58,
+    "longitud": -58.43,
+    "mes": "ENERO",
+    "barrio": "PALERMO",
+    "comuna": 14.0,
+    YEAR_COLUMN: 2018,
+}
+
+
+@pytest.fixture
+def make_raw():
+    """Devolver una fábrica de tablas crudas con una fila por cada ``override``.
+
+    Cada fila parte de ``RAW_DEFAULTS`` (válida) y recibe una dirección única,
+    salvo que el ``override`` la indique; así no hay duplicados accidentales.
+    """
+
+    def _make(overrides=({},)):
+        rows = [
+            {**RAW_DEFAULTS, "direccion": f"Calle {i}", **override}
+            for i, override in enumerate(overrides)
+        ]
+        return pd.DataFrame(rows, columns=[*RAW_COLUMNS, YEAR_COLUMN])
 
     return _make

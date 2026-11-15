@@ -15,6 +15,20 @@
 | Unificar los nombres de columna entre 2018 y 2019 (`ANTIG_`, `BARRIO_1`/`BARRIOS_1`, `COMUNA_1`/`COMUNAS`) | Ambos años describen las mismas variables con nombres distintos. Hay que unificarlos para poder unir las tablas. |
 | Descartar la columna `AGE` de 2019 | Solo existe en 2019 y no se puede completar para 2018. |
 
+## Limpieza
+
+| Decisión | Motivo |
+| --- | --- |
+| Conservar solo ventas (`VTA`) de departamentos (`DTO`) | Es el universo del problema. Había 1 alquiler y 25 edificios. |
+| `antig`: "A ESTRENAR"/"PRE-VENTA" → 0, "SIN DATO" → nulo, coma decimal → punto | En 2018 la antigüedad venía como texto. Así queda numérica en ambos años. |
+| Unificar los barrios en los 48 oficiales: subbarrios a su barrio, variantes mal codificadas corregidas, desconocidos → nulo | Las categorías tienen que ser consistentes para codificarlas. Había 59 nombres para 48 barrios. |
+| Eliminar duplicados exactos después de normalizar | El mismo aviso no debe pesar doble ni caer a la vez en train y en test. Normalizar primero detecta duplicados escritos distinto. |
+| Valores fuera de un rango plausible (m², ambientes, baños, antigüedad, ubicación) → nulo, sin borrar la fila | Son errores de carga, como 0 m² o 321 ambientes. Así se conservan las filas, y la imputación queda a cargo del Pipeline, entrenado solo con train. |
+| Eliminar filas sin precio válido o con m² cubiertos > m² totales | Sin precio no hay target, y una superficie incoherente indica un aviso mal cargado. |
+| Eliminar el precio por m² fuera de los percentiles 1–99, sobre todo el dataset | Quita errores de carga extremos en el target. Los umbrales casi no dependen del conjunto de test, así que el impacto metodológico es mínimo. |
+| Conservar `preciousd` en la tabla limpia, nunca como feature | Sirve para análisis y gráficos. Usarlo como feature filtraría el target. |
+| `id_propiedad` secuencial | Identificador único de cada aviso limpio, clave de la base de datos. |
+
 ## Metodología
 
 | Decisión | Motivo |
