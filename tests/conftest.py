@@ -3,14 +3,15 @@
 Las pruebas nunca leen ``datasets/``; en su lugar se escriben con pyshp
 shapefiles de puntos con pocas filas en el directorio temporal de cada prueba.
 Los esquemas copian el orden, los tipos y los tamaños de los ``.dbf`` reales.
-Para la limpieza se arman en memoria tablas con la forma de ``load_raw``.
+Para la limpieza se arman en memoria tablas con la forma de ``load_raw`` y,
+para el preprocesamiento, tablas con la forma de la salida de ``clean``.
 """
 
 import pandas as pd
 import pytest
 import shapefile
 
-from inmuebles.config import RAW_COLUMNS, YEAR_COLUMN
+from inmuebles.config import CLEAN_COLUMNS, ID_COLUMN, RAW_COLUMNS, YEAR_COLUMN
 
 # Esquema real 2018: ANTIG_ y CAMBIO como texto, BARRIO_1 y COMUNA_1 al final.
 SCHEMA_2018 = (
@@ -160,5 +161,41 @@ def make_raw():
             for i, override in enumerate(overrides)
         ]
         return pd.DataFrame(rows, columns=[*RAW_COLUMNS, YEAR_COLUMN])
+
+    return _make
+
+
+# Fila limpia válida por defecto, con la forma de la salida de ``clean``.
+CLEAN_DEFAULTS = {
+    ID_COLUMN: 0,
+    YEAR_COLUMN: 2018,
+    "barrio": "PALERMO",
+    "comuna": 14.0,
+    "antig": 10.0,
+    "m2total": 60.0,
+    "m2cub": 55.0,
+    "ambientes": 2.0,
+    "banos": 1.0,
+    "latitud": -34.58,
+    "longitud": -58.43,
+    "preciousd": 150000.0,
+    "preciousdm": 2500.0,
+}
+
+
+@pytest.fixture
+def make_clean():
+    """Devolver una fábrica de tablas limpias con una fila por cada ``override``.
+
+    Cada fila parte de ``CLEAN_DEFAULTS`` y recibe un identificador secuencial,
+    salvo que el ``override`` lo indique.
+    """
+
+    def _make(overrides=({},)):
+        rows = [
+            {**CLEAN_DEFAULTS, ID_COLUMN: i, **override}
+            for i, override in enumerate(overrides)
+        ]
+        return pd.DataFrame(rows, columns=list(CLEAN_COLUMNS))
 
     return _make
