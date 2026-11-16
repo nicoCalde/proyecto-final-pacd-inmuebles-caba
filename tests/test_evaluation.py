@@ -5,10 +5,15 @@ import warnings
 
 import pandas as pd
 import pytest
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 from inmuebles.config import (
+    ALL_SEGMENTS,
     BASELINE_NAME,
     CV_ORIGIN,
+    NUMERIC_FEATURES,
     SCORING,
     SEGMENT_LABELS,
     TARGET_SOURCE,
@@ -20,6 +25,7 @@ from inmuebles.evaluation import (
     confusion,
     evaluate_models,
     metrics_table,
+    model_weights,
 )
 from inmuebles.modeling import make_xy, split_data, train_models
 from inmuebles.target import ValueSegmentLabeler
@@ -196,3 +202,135 @@ def test_metrics_table_is_deterministic(flow):
     # Dentro de cada (modelo, origen), las métricas siguen el orden de SCORING.
     for _, group in table.groupby(["modelo", "origen"], sort=False):
         assert list(group["metrica"]) == list(SCORING)
+
+
+# --- Pesos de los modelos (importancias y coeficientes) --------------------
+
+FOREST, LOGISTIC = "random_forest", "logistic_regression"
+WEIGHT_COLUMNS = ["modelo", "variable", "segmento", "valor"]
+# Columnas de salida del preprocesador y su nombre limpio esperado
+CLEAN_NAMES = {
+    **{f"num__{feature}": feature for feature in NUMERIC_FEATURES},
+    "cat__barrio_PALERMO": "barrio=PALERMO",
+    "cat__comuna_14.0": "comuna=14",
+}
+
+
+def _step(results, name, step):
+    """Devolver un paso (``prep`` o ``clf``) del Pipeline ajustado de un modelo."""
+    return results[name]["estimator"].named_steps[step]
+
+
+def _raw_names(results, name):
+    """Devolver los nombres de salida del preprocesador, sin limpiar."""
+    return list(_step(results, name, "prep").get_feature_names_out())
+
+
+def _rows(weights, model):
+    """Filtrar los pesos de un modelo."""
+    return weights[weights["modelo"] == model]
+
+
+def _value(weights, model, segment, variable):
+    """Devolver el único peso de un modelo, segmento y variable."""
+    rows = _rows(weights, model)
+    mask = (rows["segmento"] == segment) & (rows["variable"] == variable)
+    return rows.loc[mask, "valor"].item()
+
+
+@pytest.fixture(scope="module")
+def weights(flow):
+    """Calcular una sola vez los pesos de los modelos del flujo."""
+    results, _, _, _ = flow
+    return model_weights(results)
+
+
+def test_model_weights_columns_and_index(weights):
+    """Verificar columnas en orden, ``RangeIndex`` y valores de punto flotante."""
+    assert list(weights.columns) == WEIGHT_COLUMNS
+    assert isinstance(weights.index, pd.RangeIndex)
+    assert pd.api.types.is_float_dtype(weights["valor"])
+    assert not weights.empty
+
+
+def test_model_weights_skips_baseline(flow, weights):
+    """Verificar que el baseline (sin pesos) no aparece y sí los modelos reales."""
+    results, _, _, _ = flow
+    assert set(weights["modelo"]) == set(results) - {BASELINE_NAME}
+
+
+def test_model_weights_forest_has_one_importance_per_feature(flow, weights):
+    """Verificar una importancia por feature, sin segmento, que suman 1."""
+    results, _, _, _ = flow
+    forest = _rows(weights, FOREST)
+    assert set(forest["segmento"]) == {ALL_SEGMENTS}
+    assert len(forest) == len(_raw_names(results, FOREST))
+    assert forest["variable"].is_unique
+    assert forest["valor"].sum() == pytest.approx(1.0)
+
+
+def test_model_weights_logistic_has_one_row_per_class_and_feature(flow, weights):
+    """Verificar un coeficiente por clase y feature, con los tres segmentos."""
+    results, _, _, _ = flow
+    clf = _step(results, LOGISTIC, "clf")
+    logistic = _rows(weights, LOGISTIC)
+    assert len(logistic) == len(clf.classes_) * len(_raw_names(results, LOGISTIC))
+    assert set(logistic["segmento"]) == set(SEGMENT_LABELS)
+    assert not logistic.duplicated(["segmento", "variable"]).any()
+
+
+@pytest.mark.parametrize("segment", SEGMENT_LABELS)
+def test_model_weights_logistic_values_follow_classes(flow, weights, segment):
+    """Verificar que cada coeficiente sale de la fila de su clase en ``classes_``.
+
+    ``classes_`` está en orden alfabético, distinto de ``SEGMENT_LABELS``.
+    """
+    results, _, _, _ = flow
+    clf = _step(results, LOGISTIC, "clf")
+    row = list(clf.classes_).index(segment)
+    raw = _raw_names(results, LOGISTIC)
+    for raw_name, variable in CLEAN_NAMES.items():
+        expected = clf.coef_[row, raw.index(raw_name)]
+        assert _value(weights, LOGISTIC, segment, variable) == pytest.approx(expected)
+
+
+def test_model_weights_forest_values_match_importances(flow, weights):
+    """Verificar que cada importancia es la de su columna en el bosque."""
+    results, _, _, _ = flow
+    importances = _step(results, FOREST, "clf").feature_importances_
+    raw = _raw_names(results, FOREST)
+    for raw_name, variable in CLEAN_NAMES.items():
+        expected = importances[raw.index(raw_name)]
+        got = _value(weights, FOREST, ALL_SEGMENTS, variable)
+        assert got == pytest.approx(expected)
+
+
+def test_model_weights_cleans_feature_names(weights):
+    """Verificar nombres sin prefijos y one-hot como ``col=valor`` sin ``.0``."""
+    names = set(weights["variable"])
+    assert not any(name.startswith(("num__", "cat__")) for name in names)
+    assert set(NUMERIC_FEATURES) <= names
+    comunas = {name for name in names if name.startswith("comuna=")}
+    assert comunas
+    assert not any(name.endswith(".0") for name in comunas)
+    assert any(name.startswith("barrio=") for name in names)
+
+
+def test_model_weights_is_sorted_and_deterministic(flow, weights):
+    """Verificar el orden por modelo, segmento y variable, sin importar la entrada."""
+    results, _, _, _ = flow
+    keys = ["modelo", "segmento", "variable"]
+    expected = weights.sort_values(keys).reset_index(drop=True)
+    pd.testing.assert_frame_equal(weights, expected)
+    reversed_results = dict(reversed(list(results.items())))
+    pd.testing.assert_frame_equal(model_weights(reversed_results), weights)
+
+
+def test_model_weights_rejects_binary_coefficients():
+    """Verificar ``ValueError`` si ``coef_`` no tiene una fila por clase (binario)."""
+    x = pd.DataFrame({"a": [0.0, 1.0, 2.0, 3.0], "b": [1.0, 0.0, 1.0, 0.0]})
+    y = pd.Series([ACC, ACC, HIGH, HIGH])
+    steps = [("prep", StandardScaler()), ("clf", LogisticRegression())]
+    pipeline = Pipeline(steps).fit(x, y)
+    with pytest.raises(ValueError, match="una fila de coeficientes por clase"):
+        model_weights({LOGISTIC: {"estimator": pipeline}})

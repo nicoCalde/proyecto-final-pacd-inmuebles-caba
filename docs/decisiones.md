@@ -47,11 +47,11 @@
 | Guardar el pipeline entrenado con joblib | Permite reutilizar el modelo sin reentrenarlo. |
 | Grilla de LogisticRegression: `C` ∈ {0,01; 0,1; 1; 10} | Recorre la regularización en escala logarítmica, de fuerte a débil. |
 | Grilla de RandomForest: 100 o 200 árboles, profundidad 20 o sin límite, hoja mínima de 1 o 5 | Contrasta árboles acotados con árboles completos: 8 combinaciones, en unos 3 minutos de entrenamiento. |
-| El RandomForest ganador es la configuración sin restricciones | El F1 de CV se mide en datos que cada fold no vio, así que no es sobreajuste a train. La comparación CV vs test de la Etapa 7 lo confirma. |
+| El RandomForest ganador es la configuración sin restricciones | Se elige por el F1 de CV, medido en datos que cada fold no vio: aunque el bosque ajuste muy bien train, lo que importa es cómo generaliza. La comparación CV vs test de la Etapa 7 muestra que esa estimación se sostiene en test. |
 | Modelo guardado con compresión (`compress=3`) y fuera de git | El RandomForest pasa de 1,2 GB a unos 200 MB. Aun así supera el límite de GitHub, por eso se regenera con el script de entrenamiento. |
 | Métricas de test con promedio macro y orden de etiquetas explícito | Es coherente con el F1 macro de la CV, así que ambas se pueden comparar, y las tres clases pesan igual. |
 | Test usado una sola vez, para todos los modelos (línea base incluida) | Con test no se elige nada, solo se confirma. La línea base da el piso de referencia. |
-| Comparación CV vs test: RandomForest 0,729 → 0,739, LogisticRegression 0,610 → 0,610, línea base 0,167 → 0,167 | Test confirma la CV: no hay sobreajuste. |
+| Comparación CV vs test: RandomForest 0,729 → 0,739, LogisticRegression 0,610 → 0,610, línea base 0,167 → 0,167 | Test confirma la estimación de la CV. Esto no mide sobreajuste, que requiere comparar con el desempeño en train. |
 | Reporte por clase | Muestra que "Estándar" es la clase más difícil (F1 0,640 contra ~0,79 de las otras): al ser el tercil del medio, limita con las otras dos. |
 | Tabla larga de métricas (modelo, métrica, origen, media, desvío) | Tiene la forma de la tabla `metricas` de la base de datos y permite comparar CV y test en una sola consulta. |
 | Precisión macro del `DummyClassifier` = 0 en las clases que nunca predice | Siempre predice la misma clase, así que la precisión de las otras dos queda indefinida y scikit-learn la toma como 0 (con una advertencia esperable). |
@@ -106,6 +106,11 @@
 | `entrenar.py` no crea la base si no existe | Una base vacía creada por error escondería que falta correr `cargar_bd.py`. |
 | El modelo se guarda recién después de escribir la corrida en la base | Así el archivo `.joblib` nunca corresponde a una corrida que no existe en la base. |
 | `data/inmuebles.db` se versiona con una sola corrida, entrenada con las grillas completas | Los revisores acceden a la base sin descargar los datos crudos, como pide la consigna. Una sola corrida mantiene el archivo chico. |
+| Tabla `importancias` con las importancias del Random Forest y los coeficientes de la regresión logística de cada corrida | Los gráficos de interpretación salen de la base y no del modelo `.joblib`, que pesa unos 200 MB y no se versiona. Así un revisor regenera todos los gráficos solo con `data/inmuebles.db`. |
+| Mapa de avisos (longitud y latitud) coloreado por segmento en lugar de un mapa de calor de correlaciones | Responde una pregunta concreta, dónde están los avisos caros, y lo muestra con un scatter, como pide la cátedra. |
+| Títulos con un hallazgo calculado desde los datos y una limitación al pie de cada gráfico | Si cambian los datos, el título no queda desactualizado. Cada gráfico deja explícito qué muestra y qué no. |
+| Gráficos con `matplotlib.figure.Figure`, sin `pyplot` | No dependen de un estado global ni de una pantalla, así que funcionan igual en los tests y en el script. |
+| Los PNG de `reports/figures/` se versionan | Son los que usan el README y la presentación. Se regeneran con `scripts/generar_graficos.py`. |
 | Gráficos generados desde la BD | Demuestra la integración con la base de datos. |
 | Python 3.12 en un entorno virtual con uv | Versión estable con soporte completo de todas las librerías del proyecto. El entorno virtual aísla las dependencias y permite reproducir la instalación en cualquier máquina. |
 | Versiones exactas (`==`) en `requirements.txt` | Así cualquier instalación reproduce exactamente el entorno probado, como pide la cátedra. Por ejemplo, pandas 3 cambia comportamientos respecto de pandas 2. |
@@ -115,3 +120,6 @@
 | black y flake8 (con docstrings y naming) | Estándar definido por el equipo para cumplir PEP 8, que exige la rúbrica. black formatea el código y flake8 verifica automáticamente el estilo, los docstrings y los nombres. |
 | `pyproject.toml` y `.flake8` | Configuración de pytest y black, y de flake8, que no lee `pyproject.toml`. |
 | Entregables en español | La consigna, la cursada y la defensa son en español. De no ser así, irían en inglés, que es la convención en el desarrollo de software. |
+| Gráfico CV vs test sin hablar de sobreajuste | CV y test son estimaciones fuera de muestra: que coincidan muestra que la CV anticipa el desempeño en test, no que no haya sobreajuste (eso requiere comparar con train). |
+| Coeficientes de la regresión logística como contraste Alta − Accesible, solo variables numéricas | Los coeficientes multinomiales suman 0 entre clases, así que un coeficiente aislado no se interpreta solo; la diferencia es el log-odds de Alta frente a Accesible por desvío estándar. Barrio y comuna (one-hot) no se grafican. La lectura es de asociación, no de causalidad. |
+| Importancias del Random Forest sumadas por variable original | La importancia por impureza es aditiva: sumar las columnas one-hot de barrio y comuna permite comparar 9 variables y medir cuánto aporta la ubicación en conjunto. |
