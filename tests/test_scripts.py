@@ -1,8 +1,8 @@
-"""Pruebas de punta a punta de los scripts ``cargar_bd.py`` y ``entrenar.py``.
+"""Pruebas de punta a punta de los scripts de carga, entrenamiento y gráficos.
 
 Los scripts se importan desde ``scripts/`` y se llama a su ``main`` con rutas
-explícitas bajo el directorio temporal: nunca se tocan ``datasets/``,
-``data/``, ``logs/`` ni ``models/``. Los ``.dbf`` crudos se escriben con la
+explícitas bajo el directorio temporal: nunca se tocan ``datasets/``, ``data/``,
+``logs/``, ``models/`` ni ``reports/``. Los ``.dbf`` crudos se escriben con la
 fábrica ``make_raw_dir`` y el entrenamiento usa ``--rapido --n-jobs 1``.
 """
 
@@ -21,13 +21,16 @@ import pytest
 from inmuebles.cleaning import clean
 from inmuebles.config import (
     BASELINE_NAME,
+    CHART_LIMITATIONS,
     CLEAN_TABLE,
     CONFIG_TABLE,
     CV_ORIGIN,
     EXIT_ERROR,
     EXIT_OK,
     FEATURE_COLUMNS,
+    FIGURE_FORMAT,
     ID_COLUMN,
+    IMPORTANCE_TABLE,
     METRICS_TABLE,
     MODEL_GRIDS,
     N_JOBS,
@@ -55,6 +58,12 @@ LOG_LINE = re.compile(
 )
 # Todos los modelos de una corrida: el baseline y los modelos reales
 ALL_MODELS = {BASELINE_NAME, *MODEL_GRIDS}
+# Gráficos esperados: uno por limitación y una matriz por cada modelo real
+CONFUSION_CHART = "matriz_confusion"
+EXPECTED_FIGURES = {
+    *(f"{key}.{FIGURE_FORMAT}" for key in CHART_LIMITATIONS if key != CONFUSION_CHART),
+    *(f"{CONFUSION_CHART}_{model}.{FIGURE_FORMAT}" for model in MODEL_GRIDS),
+}
 
 
 def _load_script(name):
@@ -373,7 +382,13 @@ def test_entrenar_validates_each_run_table(entrenar, trained_copy, monkeypatch):
     monkeypatch.setattr(entrenar, "validate_load", spy)
     paths = trained_copy
     assert _train(entrenar, paths.db, paths.model, paths.logs) == EXIT_OK
-    tables = {RUNS_TABLE, CONFIG_TABLE, METRICS_TABLE, PREDICTIONS_TABLE}
+    tables = {
+        RUNS_TABLE,
+        CONFIG_TABLE,
+        METRICS_TABLE,
+        PREDICTIONS_TABLE,
+        IMPORTANCE_TABLE,
+    }
     assert {table for table, _ in calls} == tables
     assert len({run_id for _, run_id in calls}) == 1
     assert None not in {run_id for _, run_id in calls}
@@ -432,3 +447,93 @@ def test_cargar_bd_changed_data_keeps_table_and_names_flag(reload, other_raw_dir
     assert reload.run(other_raw_dir) == EXIT_ERROR
     pd.testing.assert_frame_equal(_read(reload.db, CLEAN_TABLE), before)
     assert any("--reemplazar-corridas" in line for line in _errors(reload.logs))
+
+
+# --- generar_graficos ------------------------------------------------------
+
+
+def _charts(script, db, out, logs, *extra):
+    """Ejecutar ``generar_graficos.main`` y devolver su código de salida."""
+    argv = ["--db", str(db), "--salida", str(out), "--logs", str(logs), *extra]
+    return script.main(argv)
+
+
+@pytest.fixture(scope="module")
+def generar_graficos():
+    """Importar el script ``scripts/generar_graficos.py``."""
+    return _load_script("generar_graficos")
+
+
+@pytest.fixture(scope="module")
+def charts(e2e, generar_graficos, tmp_path_factory):
+    """Generar una sola vez los gráficos de una copia de la base entrenada."""
+    root = tmp_path_factory.mktemp("graficos")
+    db = root / "copia.db"
+    shutil.copy(e2e.db, db)
+    run = SimpleNamespace(db=db, out=root / "figuras", logs=root / "logs")
+    run.code = _charts(generar_graficos, run.db, run.out, run.logs)
+    return run
+
+
+def test_generar_graficos_writes_every_figure(charts):
+    """Verificar código 0 y un archivo no vacío por cada gráfico esperado."""
+    assert charts.code == EXIT_OK
+    written = {path.name: path for path in charts.out.iterdir()}
+    assert set(written) == EXPECTED_FIGURES
+    assert all(path.stat().st_size > 0 for path in written.values())
+
+
+def test_generar_graficos_writes_log_with_info(charts):
+    """Verificar un archivo de log de los gráficos con líneas INFO."""
+    logs = list(charts.logs.glob("*.log"))
+    assert len(logs) == 1
+    assert logs[0].name.startswith("generar_graficos")
+    assert "INFO" in _levels(charts.logs)
+
+
+def test_generar_graficos_accepts_explicit_run_id(charts, generar_graficos, tmp_path):
+    """Verificar que ``--run-id`` con una corrida existente genera los gráficos."""
+    run_id = _read(charts.db, RUNS_TABLE)[RUN_ID_COLUMN].item()
+    out = tmp_path / "figuras"
+    code = _charts(
+        generar_graficos, charts.db, out, tmp_path / "logs", "--run-id", run_id
+    )
+    assert code == EXIT_OK
+    assert {path.name for path in out.iterdir()} == EXPECTED_FIGURES
+
+
+def test_generar_graficos_without_db_fails_without_creating_it(
+    generar_graficos, tmp_path
+):
+    """Verificar código 1, ERROR que remite a los scripts previos y ninguna base."""
+    db, logs = tmp_path / "no_existe.db", tmp_path / "logs"
+    assert _charts(generar_graficos, db, tmp_path / "figuras", logs) == EXIT_ERROR
+    errors = _errors(logs)
+    assert any("cargar_bd" in line for line in errors)
+    assert any("entrenar" in line for line in errors)
+    assert not db.exists()
+
+
+def test_generar_graficos_old_db_without_weights_fails(
+    charts, generar_graficos, tmp_path
+):
+    """Verificar código 1 y ERROR que remite a entrenar.py en una base vieja."""
+    db, logs = tmp_path / "vieja.db", tmp_path / "logs"
+    shutil.copy(charts.db, db)
+    with closing(sqlite3.connect(db)) as conn:
+        conn.execute(f"DROP TABLE {IMPORTANCE_TABLE}")
+        conn.commit()
+    assert _charts(generar_graficos, db, tmp_path / "figuras", logs) == EXIT_ERROR
+    assert any("entrenar" in line for line in _errors(logs))
+    with closing(sqlite3.connect(db)) as conn:
+        sql = "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?"
+        assert conn.execute(sql, (IMPORTANCE_TABLE,)).fetchone() is None
+
+
+def test_generar_graficos_unknown_run_id_fails(charts, generar_graficos, tmp_path):
+    """Verificar código 1 y una línea ERROR si el ``--run-id`` no existe."""
+    logs = tmp_path / "logs"
+    extra = ("--run-id", "no_existe")
+    code = _charts(generar_graficos, charts.db, tmp_path / "figuras", logs, *extra)
+    assert code == EXIT_ERROR
+    assert _errors(logs)

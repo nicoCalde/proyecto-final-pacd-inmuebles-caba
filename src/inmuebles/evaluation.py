@@ -3,7 +3,8 @@
 Cada modelo ajustado por ``train_models`` se evalúa una sola vez sobre test
 con accuracy y precisión, recall y F1 con promedio ``METRIC_AVERAGE``. La
 tabla larga combina esas métricas con las de la validación cruzada de train,
-para comparar ambas y detectar sobreajuste.
+para ver si la CV anticipa el desempeño en test. ``model_weights`` extrae los pesos
+de cada modelo (importancias o coeficientes) con nombres de variable legibles.
 """
 
 import logging
@@ -20,8 +21,11 @@ from sklearn.metrics import (
 )
 
 from inmuebles.config import (
+    ALL_SEGMENTS,
+    CATEGORICAL_FEATURES,
     CONFUSION_AXES,
     CV_ORIGIN,
+    IMPORTANCE_COLUMNS,
     METRIC_AVERAGE,
     METRICS_TABLE_COLUMNS,
     SCORING,
@@ -39,6 +43,14 @@ _AVERAGED_SCORES = {
 }
 # Columnas del reporte por clase
 _REPORT_COLUMNS = ["precision", "recall", "f1", "support"]
+# Pasos del Pipeline del modelo: preprocesador y clasificador
+_PREP_STEP = "prep"
+_CLF_STEP = "clf"
+# Separador entre el transformador y la columna en get_feature_names_out
+_TRANSFORMER_SEPARATOR = "__"
+# Columnas de la tabla de pesos (sin el run_id) y su orden
+_WEIGHT_COLUMNS = list(IMPORTANCE_COLUMNS[1:])
+_WEIGHT_ORDER = ["modelo", "segmento", "variable"]
 
 
 def _check_inputs(y_true, y_pred):
@@ -214,3 +226,88 @@ def metrics_table(results, evaluations):
             value = evaluations[name]["metrics"][metric]
             rows.append((name, metric, TEST_ORIGIN, value, math.nan))
     return pd.DataFrame(rows, columns=list(METRICS_TABLE_COLUMNS))
+
+
+def _category_text(value):
+    """Escribir una categoría; un número entero va sin decimales (``14.0``)."""
+    try:
+        number = float(value)
+    except ValueError:
+        return value
+    return str(int(number)) if number.is_integer() else value
+
+
+def _clean_name(raw):
+    """Limpiar un nombre de ``get_feature_names_out`` (``cat__comuna_14.0``).
+
+    Se quita el prefijo del transformador y una columna one-hot de la feature
+    categórica ``col`` pasa a ``col=valor`` (p. ej. ``comuna=14``).
+    """
+    name = raw.split(_TRANSFORMER_SEPARATOR, 1)[-1]
+    for column in CATEGORICAL_FEATURES:
+        prefix = f"{column}_"
+        if name.startswith(prefix):
+            return f"{column}={_category_text(name.removeprefix(prefix))}"
+    return name
+
+
+def _coef_pairs(clf):
+    """Emparejar cada clase de ``classes_`` con su fila de ``coef_``.
+
+    Raises
+    ------
+    ValueError
+        Si ``coef_`` no tiene una fila por clase (p. ej. un problema binario,
+        donde hay una sola fila para dos clases).
+    """
+    if clf.coef_.shape[0] != len(clf.classes_):
+        raise ValueError(
+            f"coef_ tiene {clf.coef_.shape[0]} filas para {len(clf.classes_)} "
+            "clases: se espera una fila de coeficientes por clase."
+        )
+    return [(str(label), row) for label, row in zip(clf.classes_, clf.coef_)]
+
+
+def _weight_rows(name, pipeline):
+    """Armar las filas de pesos de un modelo; vacías si no tiene pesos."""
+    clf = pipeline.named_steps[_CLF_STEP]
+    if not hasattr(clf, "feature_importances_") and not hasattr(clf, "coef_"):
+        return []
+    raw = pipeline.named_steps[_PREP_STEP].get_feature_names_out()
+    variables = [_clean_name(column) for column in raw]
+    if hasattr(clf, "feature_importances_"):
+        pairs = [(ALL_SEGMENTS, clf.feature_importances_)]
+    else:
+        pairs = _coef_pairs(clf)
+    return [
+        (name, variable, segment, float(value))
+        for segment, values in pairs
+        for variable, value in zip(variables, values)
+    ]
+
+
+def model_weights(results):
+    """Armar la tabla de pesos (importancias o coeficientes) de cada modelo.
+
+    Parameters
+    ----------
+    results : dict
+        Salida de ``train_models``: ``{nombre: {"estimator", ...}}``.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columnas ``modelo``, ``variable``, ``segmento`` y ``valor``, ordenada
+        por modelo, segmento y variable, con ``RangeIndex``. Un bosque aporta
+        una importancia por variable con segmento ``ALL_SEGMENTS``; un modelo
+        lineal, un coeficiente por clase (de ``classes_``) y variable. Los
+        modelos sin pesos (el baseline) no aparecen.
+    """
+    rows = [
+        row
+        for name, result in results.items()
+        for row in _weight_rows(name, result["estimator"])
+    ]
+    weights = pd.DataFrame(rows, columns=_WEIGHT_COLUMNS)
+    weights["valor"] = weights["valor"].astype(float)
+    return weights.sort_values(_WEIGHT_ORDER, ignore_index=True)

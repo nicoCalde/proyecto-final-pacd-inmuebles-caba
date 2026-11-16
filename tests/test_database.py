@@ -16,12 +16,15 @@ import pandas as pd
 import pytest
 
 from inmuebles.config import (
+    ALL_SEGMENTS,
     BASELINE_NAME,
     CLEAN_COLUMNS,
     CLEAN_TABLE,
     CONFIG_COLUMNS,
     CONFIG_TABLE,
     ID_COLUMN,
+    IMPORTANCE_COLUMNS,
+    IMPORTANCE_TABLE,
     METRICS_DB_COLUMNS,
     METRICS_TABLE,
     PREDICTION_COLUMNS,
@@ -49,7 +52,7 @@ from inmuebles.database import (
     write_clean,
     write_run,
 )
-from inmuebles.evaluation import evaluate_models, metrics_table
+from inmuebles.evaluation import evaluate_models, metrics_table, model_weights
 from inmuebles.modeling import make_xy, select_best, split_data, train_models
 from inmuebles.target import ValueSegmentLabeler
 
@@ -64,13 +67,20 @@ TINY_GRIDS = {
 RUN_ID = "20260101T000000Z"
 OTHER_RUN_ID = "20260102T000000Z"
 # Tablas de una corrida, de padres a hijos.
-RUN_TABLES = (RUNS_TABLE, CONFIG_TABLE, METRICS_TABLE, PREDICTIONS_TABLE)
+RUN_TABLES = (
+    RUNS_TABLE,
+    CONFIG_TABLE,
+    METRICS_TABLE,
+    PREDICTIONS_TABLE,
+    IMPORTANCE_TABLE,
+)
 SCHEMA = {
     CLEAN_TABLE: CLEAN_COLUMNS,
     RUNS_TABLE: RUN_COLUMNS,
     CONFIG_TABLE: CONFIG_COLUMNS,
     METRICS_TABLE: METRICS_DB_COLUMNS,
     PREDICTIONS_TABLE: PREDICTION_COLUMNS,
+    IMPORTANCE_TABLE: IMPORTANCE_COLUMNS,
 }
 UNKNOWN_TABLES = ("sqlite_master", "otra_tabla", "predicciones; DROP TABLE x")
 ID_REGEX = re.compile(r"^\d{8}T\d{6}Z$")
@@ -190,8 +200,8 @@ def test_schema_tables_have_expected_columns(conn, table):
     assert _columns(conn, table) == list(SCHEMA[table])
 
 
-def test_schema_has_exactly_the_five_tables(conn):
-    """Verificar que el esquema crea las cinco tablas del proyecto."""
+def test_schema_has_exactly_the_project_tables(conn):
+    """Verificar que el esquema crea las seis tablas del proyecto."""
     sql = "SELECT name FROM sqlite_master WHERE type = 'table'"
     names = {row[0] for row in conn.execute(sql)}
     assert names == set(SCHEMA)
@@ -225,6 +235,13 @@ def test_connect_creates_parent_folders(tmp_path):
     create_schema(connection)
     connection.close()
     assert path.is_file()
+
+
+def test_create_schema_adds_importances_to_existing_db(conn):
+    """Verificar que una base previa sin ``importancias`` la gana al recrear."""
+    conn.execute(f"DROP TABLE {IMPORTANCE_TABLE}")
+    create_schema(conn)
+    assert _columns(conn, IMPORTANCE_TABLE) == list(IMPORTANCE_COLUMNS)
 
 
 def test_create_schema_twice_keeps_data(conn, small_clean):
@@ -377,6 +394,15 @@ def _metric(origin, desvio):
     )
 
 
+def _importance(model=RAW_MODEL, segment=ALL_SEGMENTS):
+    """Armar una fila de ``importancias`` para insertar con SQL crudo."""
+    return (
+        IMPORTANCE_TABLE,
+        IMPORTANCE_COLUMNS,
+        ("r1", model, "antig", segment, 0.1),
+    )
+
+
 INVALID_CHILD_ROWS = {
     "id_inexistente": _prediction(id_=999),
     "real_fuera_de_segmentos": _prediction(real="Otro"),
@@ -390,12 +416,16 @@ INVALID_CHILD_ROWS = {
         CONFIG_COLUMNS,
         ("r9", RAW_MODEL, "X", "{}", "{}"),
     ),
+    "segmento_de_peso_invalido": _importance(segment="Otro"),
+    "peso_sin_config": _importance(model="otro"),
 }
 
 VALID_CHILD_ROWS = {
     "prediccion": _prediction(predicted=HIGH),
     "metrica_cv": _metric("cv", 0.1),
     "metrica_test": _metric("test", None),
+    "peso_sin_segmento": _importance(),
+    "peso_por_segmento": _importance(segment=HIGH),
 }
 
 
@@ -506,6 +536,16 @@ def test_build_run_tables_predictions_rows(flow):
         assert group["predicho"].tolist() == expected.tolist()
 
 
+def test_build_run_tables_importances_match_model_weights(flow):
+    """Verificar que los pesos son ``model_weights`` con ``run_id`` adelante."""
+    artifacts, tables = flow
+    expected = model_weights(artifacts.results)
+    got = tables[IMPORTANCE_TABLE].drop(columns=RUN_ID_COLUMN)
+    pd.testing.assert_frame_equal(
+        got.reset_index(drop=True), expected.reset_index(drop=True)
+    )
+
+
 @pytest.mark.parametrize("field", ["test_ids", "y_test"])
 def test_build_run_tables_rejects_misaligned_index(flow, field):
     """Verificar que un índice desalineado con las predicciones da ``ValueError``."""
@@ -583,6 +623,27 @@ def test_write_run_second_run_leaves_first_untouched(run_conn, flow):
         assert _count(run_conn, table, OTHER_RUN_ID) == len(tables[table])
         after = read_table(run_conn, table, run_id=RUN_ID)
         pd.testing.assert_frame_equal(after, before[table])
+
+
+def test_write_run_importances_roundtrip(run_conn, flow):
+    """Verificar que los pesos vuelven iguales, ordenados por la clave primaria."""
+    _, tables = flow
+    write_run(run_conn, tables)
+    back = read_table(run_conn, IMPORTANCE_TABLE, run_id=RUN_ID)
+    keys = [RUN_ID_COLUMN, "modelo", "segmento", "variable"]
+    expected = tables[IMPORTANCE_TABLE].sort_values(keys).reset_index(drop=True)
+    pd.testing.assert_frame_equal(back, expected, check_dtype=False)
+
+
+def test_deleting_run_cascades_to_importances(run_conn, flow):
+    """Verificar que borrar la corrida borra sus pesos (``ON DELETE CASCADE``)."""
+    _, tables = flow
+    write_run(run_conn, tables)
+    assert _count(run_conn, IMPORTANCE_TABLE, RUN_ID) > 0
+    with run_conn:
+        sql = f"DELETE FROM {RUNS_TABLE} WHERE {RUN_ID_COLUMN} = ?"
+        run_conn.execute(sql, (RUN_ID,))
+    assert _count(run_conn, IMPORTANCE_TABLE) == 0
 
 
 def _corrupted(tables):
@@ -703,6 +764,7 @@ RUN_KEYS = {
     CONFIG_TABLE: [RUN_ID_COLUMN, "modelo"],
     METRICS_TABLE: [RUN_ID_COLUMN, "modelo", "metrica", "origen"],
     PREDICTIONS_TABLE: [RUN_ID_COLUMN, "modelo", ID_COLUMN],
+    IMPORTANCE_TABLE: [RUN_ID_COLUMN, "modelo", "segmento", "variable"],
 }
 
 

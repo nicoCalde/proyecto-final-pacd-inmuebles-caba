@@ -7,9 +7,10 @@ son atómicas e idempotentes. Las lecturas usan ``pandas.read_sql`` con
 columnas explícitas. Los nombres de tabla solo salen de una lista blanca.
 
 Tablas: ``propiedades_limpias`` (Tabla 1), ``metricas`` y ``predicciones``
-(Tabla 2), ``modelos_config`` (Tabla 3) y ``ejecuciones`` (una fila por
-corrida, padre de las demás tablas de resultados). La matriz de confusión no
-se guarda: se deriva de ``predicciones`` con ``GROUP BY``.
+(Tabla 2), ``modelos_config`` (Tabla 3), ``importancias`` (pesos de cada
+modelo, para los gráficos) y ``ejecuciones`` (una fila por corrida, padre de
+las demás tablas de resultados). La matriz de confusión no se guarda: se
+deriva de ``predicciones`` con ``GROUP BY``.
 """
 
 import json
@@ -23,6 +24,7 @@ import numpy as np
 import pandas as pd
 
 from inmuebles.config import (
+    ALL_SEGMENTS,
     CLEAN_COLUMNS,
     CLEAN_TABLE,
     CONFIG_COLUMNS,
@@ -33,6 +35,8 @@ from inmuebles.config import (
     CV_ORIGIN,
     DB_PATH,
     ID_COLUMN,
+    IMPORTANCE_COLUMNS,
+    IMPORTANCE_TABLE,
     METRICS_DB_COLUMNS,
     METRICS_TABLE,
     PREDICTION_COLUMNS,
@@ -47,7 +51,7 @@ from inmuebles.config import (
     TEST_ORIGIN,
     TEST_SIZE,
 )
-from inmuebles.evaluation import metrics_table
+from inmuebles.evaluation import metrics_table, model_weights
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +126,17 @@ CREATE TABLE IF NOT EXISTS {PREDICTIONS_TABLE} (
     FOREIGN KEY (run_id, modelo)
         REFERENCES {CONFIG_TABLE}(run_id, modelo) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS {IMPORTANCE_TABLE} (
+    run_id TEXT NOT NULL,
+    modelo TEXT NOT NULL,
+    variable TEXT NOT NULL,
+    segmento TEXT NOT NULL
+        CHECK (segmento IN ({_SEGMENTS_SQL}, '{ALL_SEGMENTS}')),
+    valor REAL NOT NULL,
+    PRIMARY KEY (run_id, modelo, variable, segmento),
+    FOREIGN KEY (run_id, modelo)
+        REFERENCES {CONFIG_TABLE}(run_id, modelo) ON DELETE CASCADE
+);
 CREATE INDEX IF NOT EXISTS idx_{PREDICTIONS_TABLE}_{ID_COLUMN}
     ON {PREDICTIONS_TABLE}({ID_COLUMN});
 CREATE VIEW IF NOT EXISTS {CONFUSION_VIEW} AS
@@ -140,9 +155,19 @@ _TABLES = {
         (RUN_ID_COLUMN, "modelo", "metrica", "origen"),
     ),
     PREDICTIONS_TABLE: (PREDICTION_COLUMNS, (RUN_ID_COLUMN, "modelo", ID_COLUMN)),
+    IMPORTANCE_TABLE: (
+        IMPORTANCE_COLUMNS,
+        (RUN_ID_COLUMN, "modelo", "segmento", "variable"),
+    ),
 }
 # Tablas de una corrida, de padres a hijos (orden de inserción)
-_RUN_TABLES = (RUNS_TABLE, CONFIG_TABLE, METRICS_TABLE, PREDICTIONS_TABLE)
+_RUN_TABLES = (
+    RUNS_TABLE,
+    CONFIG_TABLE,
+    METRICS_TABLE,
+    PREDICTIONS_TABLE,
+    IMPORTANCE_TABLE,
+)
 
 
 def connect(path=DB_PATH):
@@ -463,8 +488,15 @@ def _prediction_rows(artifacts):
     return pd.concat(frames, ignore_index=True)
 
 
+def _importance_rows(artifacts):
+    """Armar los pesos de cada modelo con el ``run_id`` adelante."""
+    weights = model_weights(artifacts.results)
+    weights.insert(0, RUN_ID_COLUMN, artifacts.run_id)
+    return weights
+
+
 def build_run_tables(artifacts):
-    """Armar las cuatro tablas de resultados de una corrida.
+    """Armar las cinco tablas de resultados de una corrida.
 
     Parameters
     ----------
@@ -474,8 +506,8 @@ def build_run_tables(artifacts):
     Returns
     -------
     dict of str to pandas.DataFrame
-        ``{RUNS_TABLE, CONFIG_TABLE, METRICS_TABLE, PREDICTIONS_TABLE}``, cada
-        una con sus columnas en orden.
+        ``{RUNS_TABLE, CONFIG_TABLE, METRICS_TABLE, PREDICTIONS_TABLE,
+        IMPORTANCE_TABLE}``, cada una con sus columnas en orden.
 
     Raises
     ------
@@ -491,6 +523,7 @@ def build_run_tables(artifacts):
         CONFIG_TABLE: _config_rows(artifacts),
         METRICS_TABLE: _metrics_rows(artifacts),
         PREDICTIONS_TABLE: _prediction_rows(artifacts),
+        IMPORTANCE_TABLE: _importance_rows(artifacts),
     }
 
 
@@ -498,7 +531,7 @@ def write_run(conn, tables):
     """Escribir una corrida reemplazando la versión previa de ese ``run_id``.
 
     En una sola transacción se borra la corrida (las tablas hijas caen por
-    ``ON DELETE CASCADE``) y se insertan las cuatro tablas, de padres a
+    ``ON DELETE CASCADE``) y se insertan las cinco tablas, de padres a
     hijos. Si algo falla, no queda ninguna fila parcial.
 
     Parameters

@@ -263,6 +263,11 @@ RUN_COLUMNS = (
 CONFIG_COLUMNS = (RUN_ID_COLUMN, "modelo", "clase", "hiperparametros", "parametros")
 METRICS_DB_COLUMNS = (RUN_ID_COLUMN, *METRICS_TABLE_COLUMNS)
 PREDICTION_COLUMNS = (RUN_ID_COLUMN, "modelo", ID_COLUMN, *CONFUSION_AXES)
+# Pesos de cada modelo: importancias (RandomForest) y coeficientes (LogReg)
+IMPORTANCE_TABLE = "importancias"
+IMPORTANCE_COLUMNS = (RUN_ID_COLUMN, "modelo", "variable", "segmento", "valor")
+# Segmento de una importancia que no depende de la clase (RandomForest)
+ALL_SEGMENTS = "Todos"
 # Vista con la matriz de confusión de cada corrida y modelo (conteo por celda)
 CONFUSION_VIEW = "matriz_confusion"
 CONFUSION_COUNT_COLUMN = "casos"
@@ -289,3 +294,91 @@ EXIT_ERROR = 1
 # EXIT_ERROR: archivos faltantes o ilegibles, datos inválidos y fallas de la
 # base. Cualquier otro error se propaga con su traceback.
 SCRIPT_ERRORS = (OSError, ValueError, sqlite3.Error)
+
+# Gráficos: resolución, formato y textos comunes
+FIGURE_DPI = 150
+FIGURE_FORMAT = "png"
+DATA_SOURCE = "Fuente: BA Data, departamentos en venta 2018-2019"
+# Color fijo de cada segmento en todos los gráficos (de menor a mayor valor)
+SEGMENT_COLORS = {"Accesible": "#2a9d8f", "Estándar": "#e9c46a", "Alta": "#e76f51"}
+# Nombre y color de cada modelo en los gráficos
+MODEL_LABELS = {
+    "dummy": "Baseline (dummy)",
+    "logistic_regression": "Regresión logística",
+    "random_forest": "Random Forest",
+}
+MODEL_COLORS = {
+    "dummy": "#9e9e9e",
+    "logistic_regression": "#457b9d",
+    "random_forest": "#1d3557",
+}
+# Nombre en español de cada métrica y de cada feature
+METRIC_LABELS = {
+    "accuracy": "Accuracy",
+    "precision": "Precisión",
+    "recall": "Recall",
+    "f1": "F1",
+}
+FEATURE_LABELS = {
+    "antig": "Antigüedad",
+    "m2total": "Superficie total",
+    "m2cub": "Superficie cubierta",
+    "ambientes": "Ambientes",
+    "banos": "Baños",
+    "latitud": "Latitud",
+    "longitud": "Longitud",
+    "barrio": "Barrio",
+    "comuna": "Comuna",
+}
+# Parámetros de los gráficos
+PRICE_BINS = 60  # barras del histograma de USD/m²
+TOP_BARRIOS = 8  # barrios más caros y más baratos que se muestran
+MIN_BARRIO_LISTINGS = 100  # avisos mínimos para mostrar un barrio
+MAP_SAMPLE = 20000  # puntos del mapa (muestra reproducible)
+KM_PER_DEGREE_LAT = 111.0  # km por grado de latitud
+IMPORTANCE_MODEL = "random_forest"  # modelo cuyas importancias se grafican
+COEF_MODEL = "logistic_regression"  # modelo cuyos coeficientes se grafican
+# Contraste de coeficientes que se grafica: log-odds de Alta frente a Accesible
+# (los coeficientes multinomiales suman 0 entre clases)
+COEF_CONTRAST = ("Alta", "Accesible")
+# Variables originales que describen la ubicación del aviso
+LOCATION_FEATURES = ("latitud", "longitud", "barrio", "comuna")
+# Colores neutros (no de segmento): resto de variables, signo de un coeficiente
+NEUTRAL_COLOR = "#bdbdbd"
+POSITIVE_COLOR = "#b2182b"
+NEGATIVE_COLOR = "#2166ac"
+# Máxima diferencia |test - CV| de F1 con la que se dice que ambas "coinciden"
+CV_TEST_TOLERANCE = 0.03
+# Limitación que acompaña a cada gráfico (clave = nombre del archivo)
+CHART_LIMITATIONS = {
+    "distribucion_precio_m2": (
+        "Precios de publicación (de oferta), no de cierre. "
+        "Umbrales calculados solo con train."
+    ),
+    "precio_m2_por_barrio": (
+        "Mediana de los avisos de cada barrio; se omiten los barrios con menos "
+        f"de {MIN_BARRIO_LISTINGS} avisos."
+    ),
+    "mapa_segmentos": (
+        "Muestra aleatoria de avisos; la ubicación es la declarada en el aviso."
+    ),
+    "metricas_modelos": (
+        "Una sola partición train/test; promedios macro (las 3 clases pesan igual)."
+    ),
+    "cv_vs_test": (
+        "CV y test son estimaciones fuera de muestra: esta comparación no mide "
+        "sobreajuste (eso requiere comparar con train)."
+    ),
+    "matriz_confusion": (
+        "Los segmentos cortan una variable continua: cerca de los umbrales el "
+        "error es esperable."
+    ),
+    "importancia_random_forest": (
+        "Importancia por impureza: no implica causalidad y favorece a las "
+        "variables continuas."
+    ),
+    "coeficientes_regresion_logistica": (
+        "Asociación condicional al resto de las variables, no causalidad; la "
+        "ubicación también entra por barrio y comuna, que no se grafican."
+    ),
+}
