@@ -31,7 +31,7 @@ Development follows an approved, staged implementation plan with a TDD cycle (Re
 - **Target**: a value segment from the **terciles of `PRECIOUSDM`** (USD per m²): Accesible / Estándar / Alta. The tercile thresholds are fitted **on the train split only**.
 - **No leakage**: no price-derived column may be used as a feature. That rules out `PRECIOUSD`, `PRECIOARS`, `PRECIOUSDM`, `PRECIOARSM` and `CAMBIO`. A test enforces this.
 - **Models**: `LogisticRegression` and `RandomForestClassifier`, tuned with `GridSearchCV`, `StratifiedKFold(5)`, `scoring="f1_macro"` and `random_state=42`.
-- **DB**: SQLite through the stdlib `sqlite3` plus `pandas.to_sql`/`read_sql`. The schema is explicit DDL with PK and FK constraints and `PRAGMA foreign_keys=ON`. Writes are idempotent and run inside transactions. No ORM, and no `SELECT *` in production code.
+- **DB**: SQLite through the stdlib `sqlite3`: writes with `executemany` in one transaction (`to_sql` commits on its own), reads with `pandas.read_sql`. The schema is explicit DDL with PK and FK constraints and `PRAGMA foreign_keys=ON`. Writes are idempotent and run inside transactions. No ORM, and no `SELECT *` in production code.
 
 ## Course alignment (adopted)
 
@@ -60,15 +60,38 @@ The class material in `clases/` is git-ignored and serves as reference only. A r
 - **Git**: merge PRs with a merge commit, not squash, so the granular history stays visible.
 - **README**: install instructions for both `python -m venv` + `pip` and `uv`.
 
-## Planned layout
+## Commands
 
-The layout is planned, not built yet. Create each piece only in its stage.
+Run from the repo root with `.venv` active (`uv run` would create an unused `uv.lock`; use `uv run --no-sync` if needed):
 
-- `src/inmuebles/`: the package. Modules: `config`, `data_loading`, `cleaning`, `target`, `preprocessing`, `modeling`, `evaluation`, `database`, `visualization`.
-- `scripts/`: thin orchestrators (`cargar_bd.py`, `entrenar.py`, `generar_graficos.py`) with `main()` and `argparse`. They hold no logic of their own.
-- `tests/`: pytest tests, one file per module, with shared fixtures in `conftest.py`.
-- `reports/figures/`: the generated PNGs.
-- `data/inmuebles.db`: the SQLite database that gets delivered.
+```bash
+python scripts/cargar_bd.py          # datasets/ -> Table 1 (propiedades_limpias)
+python scripts/entrenar.py           # Table 1 -> Tables 2 and 3, models/mejor_modelo.joblib (~5 min)
+python scripts/entrenar.py --rapido  # reduced grids, for a quick demo
+python scripts/generar_graficos.py   # DB -> reports/figures/*.png
+pytest                               # synthetic data only, never datasets/
+black --check src scripts tests
+flake8 src scripts tests
+```
+
+All scripts accept `--db` and `--logs`; see `--help`. The versioned `data/inmuebles.db` already holds Table 1 and one full-grid run, so training and charts work without `datasets/`.
+
+## Architecture
+
+- `src/inmuebles/`: the package, installed in editable mode by `requirements.txt` (`-e .`).
+  - `config`: every path, constant, grid, label and color. No magic values elsewhere.
+  - `data_loading` reads the `.dbf` files and harmonizes the columns; `cleaning` filters, normalizes and masks implausible values, logging a WARNING for each discarded or masked batch.
+  - `target`: `ValueSegmentLabeler`, terciles fitted on train only, kept outside the sklearn `Pipeline`.
+  - `preprocessing` builds the unfitted `ColumnTransformer`; `modeling` does the stratified split, `GridSearchCV` per model, selection by CV mean and joblib saving.
+  - `evaluation`: test metrics, confusion matrices, per-class report and `model_weights` (RF importances, LR coefficients).
+  - `database`: explicit DDL, whitelisted tables, idempotent single-transaction writes with `executemany`, and post-load validation.
+  - `visualization`: charts built on `matplotlib.figure.Figure` (no `pyplot`), loaded from the DB only, with computed takeaway titles.
+  - `logging_setup`: `log_session`, a console plus `logs/<name>_<stamp>.log` handler pair in UTC.
+- `scripts/`: thin orchestrators with `parse_args` and `main(argv=None) -> int`. They catch `SCRIPT_ERRORS`, log ERROR and return exit code 1.
+- DB tables: `propiedades_limpias` (Table 1), `metricas` and `predicciones` (Table 2), `modelos_config` (Table 3), plus `ejecuciones`, `importancias` and the `matriz_confusion` view. Results are keyed by `run_id` (UTC timestamp), which is also the training log's stamp.
+- `tests/`: one file per module, shared fixtures in `conftest.py` built from synthetic data.
+- `reports/figures/`: the generated PNGs, versioned because the README and the deck use them.
+- `docs/decisiones.md`: the decision log.
 
 ## Datasets
 
