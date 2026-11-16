@@ -20,3 +20,9 @@ CLAUDE.local.md
 
 # Modelos entrenados (un RandomForest puede superar el límite de 100 MB de GitHub)
 models/
+
+# Metadatos del paquete instalado en modo editable
+*.egg-info/
+
+# Logs de los scripts (se generan en cada ejecución)
+logs/

@@ -4,6 +4,7 @@ Las rutas se anclan en la raíz del repositorio, por lo que no dependen del
 directorio de trabajo actual. Importar este módulo no crea directorios.
 """
 
+import sqlite3
 from pathlib import Path
 
 # Raíz del repositorio: src/inmuebles/config.py -> parents[2]
@@ -18,11 +19,13 @@ FIGURES_DIR = PROJECT_ROOT / "reports" / "figures"
 RANDOM_STATE = 42
 TEST_SIZE = 0.2
 
-# Archivos .dbf crudos por año (la capitalización de las carpetas es la real)
-RAW_FILES = {
-    2018: RAW_DIR / "Departamentos en Venta 2018" / "Departamentos_venta_2018.dbf",
-    2019: RAW_DIR / "Departamentos en venta 2019" / "Departamentos_venta_2019.dbf",
+# Archivos .dbf crudos relativos a la carpeta de datos crudos (la
+# capitalización de las carpetas es la real)
+RAW_FILE_NAMES = {
+    2018: Path("Departamentos en Venta 2018", "Departamentos_venta_2018.dbf"),
+    2019: Path("Departamentos en venta 2019", "Departamentos_venta_2019.dbf"),
 }
+RAW_FILES = {year: RAW_DIR / name for year, name in RAW_FILE_NAMES.items()}
 DBF_ENCODING = "utf-8"
 
 # Alias para unificar los nombres de columna de 2018 y 2019
@@ -263,3 +266,26 @@ PREDICTION_COLUMNS = (RUN_ID_COLUMN, "modelo", ID_COLUMN, *CONFUSION_AXES)
 # Vista con la matriz de confusión de cada corrida y modelo (conteo por celda)
 CONFUSION_VIEW = "matriz_confusion"
 CONFUSION_COUNT_COLUMN = "casos"
+
+# Logging: consola + archivo por ejecución en logs/ (horas en UTC, como el
+# nombre del archivo y el run_id)
+LOGS_DIR = PROJECT_ROOT / "logs"
+LOG_FORMAT = "%(asctime)s %(name)s %(levelname)s %(message)s"
+LOG_LEVEL = "INFO"
+
+# Grillas reducidas (--rapido): demos y pruebas de punta a punta
+QUICK_GRIDS = {
+    "logistic_regression": {"clf__C": [1.0]},
+    "random_forest": {"clf__n_estimators": [50], "clf__max_depth": [20]},
+}
+
+# Procesos en paralelo por defecto de los scripts (-1: todos los núcleos)
+N_JOBS = -1
+
+# Códigos de salida de los scripts
+EXIT_OK = 0
+EXIT_ERROR = 1
+# Errores esperables que los scripts registran como ERROR y convierten en
+# EXIT_ERROR: archivos faltantes o ilegibles, datos inválidos y fallas de la
+# base. Cualquier otro error se propaga con su traceback.
+SCRIPT_ERRORS = (OSError, ValueError, sqlite3.Error)
