@@ -95,6 +95,17 @@
 | Recargar los mismos datos limpios no cambia nada. Si cambiaron y hay corridas guardadas, la carga falla, salvo que se pida explícitamente borrarlas | Los ids se numeran al limpiar. Con datos nuevos, las predicciones viejas apuntarían a otros avisos sin que nadie lo note. |
 | Validar columnas y cantidad de filas después de cada carga | Confirma que lo guardado es lo que se quiso guardar. Es una pauta de la cátedra. |
 | Índice sobre `predicciones.id_propiedad` | Acelera el control de la clave foránea al borrar avisos y los cruces con la tabla limpia. |
+| Dos scripts: `cargar_bd.py` (crudos → Tabla 1) y `entrenar.py` (Tabla 1 → Tablas 2 y 3) | Cargar datos y entrenar son pasos independientes: se puede reentrenar sin releer los shapefiles. Los revisores sin `datasets/` pueden entrenar desde la base entregada. |
+| Scripts con `main()` y `argparse`, sin lógica propia | Toda la lógica está en el paquete, que tiene tests. Las rutas tienen valores por defecto en `config` y se pueden cambiar sin tocar el código. |
+| Paquete instalable en modo editable (`-e .` en `requirements.txt`) | Los scripts importan `inmuebles` desde cualquier carpeta, sin manipular `sys.path`. |
+| Opción `--rapido` con grillas reducidas | Permite una demo o una prueba de punta a punta en segundos. Las grillas completas siguen siendo las de la entrega. |
+| Un archivo de log por ejecución en `logs/`, con el `run_id` en el nombre y horas en UTC | Cada corrida de la base tiene su log y se encuentran por el mismo identificador. `logs/` no se versiona porque se genera en cada ejecución. |
+| Nivel WARNING para filas descartadas y valores enmascarados en la limpieza | Deja a la vista cuántos datos se pierden en cada paso. Es una pauta de la cátedra. |
+| Avisos de `warnings` (p. ej. de scikit-learn) redirigidos al log | Quedan en el archivo de la corrida en lugar de perderse en la consola. |
+| Errores esperables (archivos faltantes, datos inválidos, fallas de SQLite) registrados como ERROR, con código de salida 1 | El usuario recibe un mensaje claro y el log registra la causa. Un error inesperado se propaga con su traceback para no ocultar bugs. |
+| `entrenar.py` no crea la base si no existe | Una base vacía creada por error escondería que falta correr `cargar_bd.py`. |
+| El modelo se guarda recién después de escribir la corrida en la base | Así el archivo `.joblib` nunca corresponde a una corrida que no existe en la base. |
+| `data/inmuebles.db` se versiona con una sola corrida, entrenada con las grillas completas | Los revisores acceden a la base sin descargar los datos crudos, como pide la consigna. Una sola corrida mantiene el archivo chico. |
 | Gráficos generados desde la BD | Demuestra la integración con la base de datos. |
 | Python 3.12 en un entorno virtual con uv | Versión estable con soporte completo de todas las librerías del proyecto. El entorno virtual aísla las dependencias y permite reproducir la instalación en cualquier máquina. |
 | Versiones exactas (`==`) en `requirements.txt` | Así cualquier instalación reproduce exactamente el entorno probado, como pide la cátedra. Por ejemplo, pandas 3 cambia comportamientos respecto de pandas 2. |

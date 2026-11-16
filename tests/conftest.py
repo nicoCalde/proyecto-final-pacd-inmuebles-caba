@@ -247,3 +247,91 @@ def learnable_clean(make_clean):
     df.loc[3::40, "m2cub"] = np.nan
     df.loc[7::50, "comuna"] = np.nan
     return df
+
+
+# --- Carpeta de datos crudos para las pruebas de punta a punta --------------
+
+# Filas aprendibles por año y tipo de cambio de cada año (texto, como en los
+# .dbf reales)
+RAW_DIR_ROWS = 150
+RAW_DIR_CAMBIO = {2018: "28.5", 2019: "39.0"}
+RAW_DIR_SCHEMAS = {2018: SCHEMA_2018, 2019: SCHEMA_2019}
+# Filas que la limpieza descarta (otra operación) o enmascara (fuera de rango)
+RAW_DIR_DISCARDED = ({"operacion": "ALQ"}, {"m2total": 5000.0})
+
+
+def _schema_key(name):
+    """Normalizar un campo del esquema como lo hace ``load_raw``."""
+    from inmuebles.config import COLUMN_ALIASES
+
+    return COLUMN_ALIASES.get(name.lower(), name.lower())
+
+
+def _learnable_raw_row(rng, year, index, seed):
+    """Armar una fila cruda válida cuyo precio por m² es aprendible."""
+    barrio = str(rng.choice(list(LEARNABLE_BARRIOS)))
+    comuna, base = LEARNABLE_BARRIOS[barrio]
+    latitud = rng.uniform(-34.70, -34.55)
+    m2total = rng.uniform(30.0, 150.0)
+    price = base + 4000.0 * (latitud + 34.70) - 3.0 * m2total + rng.normal(0, 50)
+    cambio = float(RAW_DIR_CAMBIO[year])
+    return {
+        "operacion": "VTA",
+        "tipo": "DTO",
+        "antig": float(rng.integers(0, 60)),
+        "age": "EST",
+        "m2total": m2total,
+        "m2cub": 0.9 * m2total,
+        "ambientes": float(rng.integers(1, 5)),
+        "banos": float(rng.integers(1, 3)),
+        "direccion": f"Calle {seed}-{year}-{index}",
+        "cambio": RAW_DIR_CAMBIO[year],
+        "preciousd": price * m2total,
+        "precioars": price * m2total * cambio,
+        "preciousdm": price,
+        "precioarsm": price * cambio,
+        "latitud": latitud,
+        "longitud": rng.uniform(-58.50, -58.36),
+        "mes": "ENERO",
+        "barrio": barrio,
+        "comuna": comuna,
+    }
+
+
+def _year_records(year, seed):
+    """Armar los registros de un año en el orden y con los tipos del esquema."""
+    rng = np.random.default_rng([seed, year])
+    rows = [_learnable_raw_row(rng, year, i, seed) for i in range(RAW_DIR_ROWS)]
+    for i, override in enumerate(RAW_DIR_DISCARDED):
+        rows[i] = {**rows[i], **override}
+    for row in rows:
+        if year == 2018:
+            row["antig"] = str(int(row["antig"]))
+        else:
+            row["preciousdm"] = int(round(row["preciousdm"]))
+            row["comuna"] = int(row["comuna"])
+    keys = [_schema_key(field[0]) for field in RAW_DIR_SCHEMAS[year]]
+    return [[row[key] for key in keys] for row in rows]
+
+
+@pytest.fixture(scope="session")
+def make_raw_dir():
+    """Devolver una fábrica que escribe los ``.dbf`` de 2018 y 2019 en una carpeta.
+
+    La fábrica recibe la carpeta raíz y una semilla, escribe cada año en
+    ``root / RAW_FILE_NAMES[year]`` con su esquema real y devuelve ``root``.
+    Cada año tiene ``RAW_DIR_ROWS`` filas aprendibles con direcciones únicas;
+    la primera es un alquiler (se descarta) y la segunda tiene ``m2total``
+    fuera de rango (se enmascara). Semillas distintas dan datos distintos.
+    """
+    from inmuebles.config import RAW_FILE_NAMES
+
+    def _make(root, seed=0):
+        for year, name in RAW_FILE_NAMES.items():
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            records = _year_records(year, seed)
+            _write_dbf(path.with_suffix(""), RAW_DIR_SCHEMAS[year], records)
+        return root
+
+    return _make

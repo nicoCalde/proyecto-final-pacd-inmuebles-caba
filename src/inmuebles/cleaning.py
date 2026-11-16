@@ -119,12 +119,26 @@ def mask_out_of_range(df):
     -------
     pandas.DataFrame
         Copia de ``df`` donde cada valor fuera de su rango inclusivo es NaN.
+
+    Notes
+    -----
+    Por cada columna con algún valor enmascarado (no nulo antes, NaN después)
+    se registra un WARNING con la cantidad.
     """
     masked = {
         column: df[column].where(df[column].between(low, high))
         for column, (low, high) in VALID_RANGES.items()
     }
+    for column, values in masked.items():
+        _warn_masked(column, df[column].notna() & values.isna())
     return df.assign(**masked)
+
+
+def _warn_masked(column, newly_masked):
+    """Registrar un WARNING si ``column`` tiene valores recién enmascarados."""
+    count = int(newly_masked.sum())
+    if count:
+        logger.warning("%s: %d valores fuera de rango pasan a NaN", column, count)
 
 
 def drop_invalid_rows(df):
@@ -183,6 +197,12 @@ _STEPS = (
 )
 
 
+def _log_dropped(step_name, dropped):
+    """Registrar las filas eliminadas por un paso: WARNING si hubo, si no INFO."""
+    level = logging.WARNING if dropped else logging.INFO
+    logger.log(level, "%s: %d filas eliminadas", step_name, dropped)
+
+
 def clean(df):
     """Aplicar toda la limpieza y devolver la tabla con ``CLEAN_COLUMNS``.
 
@@ -201,7 +221,7 @@ def clean(df):
     for step in _STEPS:
         before = len(result)
         result = step(result)
-        logger.info("%s: %d filas eliminadas", step.__name__, before - len(result))
+        _log_dropped(step.__name__, before - len(result))
     columns = [column for column in CLEAN_COLUMNS if column != ID_COLUMN]
     result = result.loc[:, columns].reset_index(drop=True)
     result.insert(0, ID_COLUMN, range(1, len(result) + 1))

@@ -255,7 +255,8 @@ def _check_stale_runs(conn, replace_runs):
     if runs and not replace_runs:
         raise ValueError(
             f"Los datos limpios cambiaron y hay {runs} corridas guardadas: "
-            "usar replace_runs=True para borrarlas y recargar."
+            "usar replace_runs=True (--reemplazar-corridas en "
+            "scripts/cargar_bd.py) para borrarlas y recargar."
         )
     return runs
 

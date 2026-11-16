@@ -1,5 +1,7 @@
 """Pruebas de la limpieza de los avisos crudos de departamentos en venta."""
 
+import logging
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -231,3 +233,42 @@ def test_clean_empty_input_returns_empty_contract(make_raw):
     result = clean(make_raw([]))
     assert result.empty
     assert list(result.columns) == list(CLEAN_COLUMNS)
+
+
+def _messages(caplog, level):
+    """Devolver los mensajes registrados por la limpieza con un nivel dado."""
+    return [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "inmuebles.cleaning" and record.levelno == level
+    ]
+
+
+def test_mask_out_of_range_warns_masked_count_per_column(make_raw, caplog):
+    """Verificar un WARNING por columna enmascarada, con su cantidad de valores."""
+    df = make_raw([{"m2total": 0.0}, {"m2total": 5000.0}, {"banos": 50.0}, {}])
+    with caplog.at_level(logging.INFO, logger="inmuebles.cleaning"):
+        mask_out_of_range(df)
+    assert sorted(_messages(caplog, logging.WARNING)) == [
+        "banos: 1 valores fuera de rango pasan a NaN",
+        "m2total: 2 valores fuera de rango pasan a NaN",
+    ]
+
+
+def test_mask_out_of_range_no_warning_when_all_in_range(make_raw, caplog):
+    """Verificar que sin valores fuera de rango (un NaN previo no cuenta) no avisa."""
+    df = make_raw([{"antig": np.nan, "banos": np.nan}, {}])
+    with caplog.at_level(logging.INFO, logger="inmuebles.cleaning"):
+        mask_out_of_range(df)
+    assert _messages(caplog, logging.WARNING) == []
+
+
+def test_clean_warns_only_for_steps_that_drop_rows(make_raw, caplog):
+    """Verificar WARNING en el paso que descarta filas e INFO en los demás."""
+    df = make_raw([{}, {"operacion": "ALQ"}, {}])
+    with caplog.at_level(logging.INFO, logger="inmuebles.cleaning"):
+        clean(df)
+    assert _messages(caplog, logging.WARNING) == ["filter_listings: 1 filas eliminadas"]
+    infos = _messages(caplog, logging.INFO)
+    assert "_drop_duplicates: 0 filas eliminadas" in infos
+    assert any(message.startswith("Limpieza terminada") for message in infos)
