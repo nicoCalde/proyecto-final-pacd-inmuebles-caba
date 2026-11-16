@@ -84,6 +84,17 @@
 | Decisión | Motivo |
 | --- | --- |
 | SQLite | La consigna pide una BD accesible. Un archivo en el repo no necesita servidor. |
+| Tablas: `propiedades_limpias` (Tabla 1), `metricas` y `predicciones` (Tabla 2), `modelos_config` (Tabla 3) y `ejecuciones` | Cubre las tres tablas de la consigna. `ejecuciones` tiene una fila por entrenamiento y es la tabla padre de los resultados. |
+| `run_id` (fecha y hora UTC) en todas las tablas de resultados | Cada entrenamiento queda identificado y se pueden comparar corridas. La tabla limpia no lo lleva porque es la fuente, cargada aparte del entrenamiento. |
+| Tabla limpia sin la columna `segmento` | El segmento depende de los umbrales de cada corrida, que se guardan en `ejecuciones`. |
+| Predicciones solo sobre test, para todos los modelos | Son los datos que ningún modelo vio. Guardar todos los modelos permite compararlos caso por caso. |
+| Matriz de confusión como vista (`matriz_confusion`) y no como tabla | Se calcula a partir de `predicciones`. Guardarla aparte duplicaría datos que podrían quedar inconsistentes. |
+| Claves primarias y foráneas, `CHECK` y `PRAGMA foreign_keys=ON` | Es la base la que rechaza datos inválidos, como un segmento inexistente, una predicción de un aviso que no existe o un desvío en una métrica de test. |
+| Escrituras en una sola transacción, idempotentes | Si algo falla no queda una carga a medias. Volver a escribir la misma corrida la reemplaza, sin duplicar filas. |
+| Escritura con `sqlite3` (`executemany`) en lugar de `pandas.to_sql` | `to_sql` confirma los cambios por su cuenta, y eso rompe la transacción única. Las lecturas sí usan `pandas.read_sql`. |
+| Recargar los mismos datos limpios no cambia nada. Si cambiaron y hay corridas guardadas, la carga falla, salvo que se pida explícitamente borrarlas | Los ids se numeran al limpiar. Con datos nuevos, las predicciones viejas apuntarían a otros avisos sin que nadie lo note. |
+| Validar columnas y cantidad de filas después de cada carga | Confirma que lo guardado es lo que se quiso guardar. Es una pauta de la cátedra. |
+| Índice sobre `predicciones.id_propiedad` | Acelera el control de la clave foránea al borrar avisos y los cruces con la tabla limpia. |
 | Gráficos generados desde la BD | Demuestra la integración con la base de datos. |
 | Python 3.12 en un entorno virtual con uv | Versión estable con soporte completo de todas las librerías del proyecto. El entorno virtual aísla las dependencias y permite reproducir la instalación en cualquier máquina. |
 | Versiones exactas (`==`) en `requirements.txt` | Así cualquier instalación reproduce exactamente el entorno probado, como pide la cátedra. Por ejemplo, pandas 3 cambia comportamientos respecto de pandas 2. |

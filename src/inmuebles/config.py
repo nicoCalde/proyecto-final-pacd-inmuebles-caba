@@ -234,3 +234,32 @@ TEST_ORIGIN = "test"
 METRICS_TABLE_COLUMNS = ("modelo", "metrica", "origen", "media", "desvio")
 # Nombres de los ejes de la matriz de confusión (filas y columnas)
 CONFUSION_AXES = ("real", "predicho")
+
+# Base de datos: nombres de las tablas
+CLEAN_TABLE = "propiedades_limpias"  # Tabla 1 (datos limpios)
+RUNS_TABLE = "ejecuciones"  # una fila por entrenamiento (run_id)
+CONFIG_TABLE = "modelos_config"  # Tabla 3 (configuración por modelo)
+METRICS_TABLE = "metricas"  # Tabla 2 (métricas globales de CV y test)
+PREDICTIONS_TABLE = "predicciones"  # Tabla 2 (predicciones sobre test)
+# Identificador de cada entrenamiento: marca de tiempo UTC
+RUN_ID_COLUMN = "run_id"
+RUN_ID_FORMAT = "%Y%m%dT%H%M%SZ"
+# Columnas, en orden, de cada tabla de resultados
+RUN_COLUMNS = (
+    RUN_ID_COLUMN,
+    "fecha",
+    "modelo_elegido",
+    "metrica_seleccion",
+    "umbral_bajo",
+    "umbral_alto",
+    "semilla",
+    "proporcion_test",
+    "filas_train",
+    "filas_test",
+)
+CONFIG_COLUMNS = (RUN_ID_COLUMN, "modelo", "clase", "hiperparametros", "parametros")
+METRICS_DB_COLUMNS = (RUN_ID_COLUMN, *METRICS_TABLE_COLUMNS)
+PREDICTION_COLUMNS = (RUN_ID_COLUMN, "modelo", ID_COLUMN, *CONFUSION_AXES)
+# Vista con la matriz de confusión de cada corrida y modelo (conteo por celda)
+CONFUSION_VIEW = "matriz_confusion"
+CONFUSION_COUNT_COLUMN = "casos"
