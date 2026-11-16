@@ -224,3 +224,13 @@ MODELS_DIR = PROJECT_ROOT / "models"
 MODEL_PATH = MODELS_DIR / "mejor_modelo.joblib"
 # Nivel de compresión de joblib: el RandomForest pasa de ~1,2 GB a ~200 MB
 MODEL_COMPRESSION = 3
+
+# Evaluación en test: promedio macro (las 3 clases pesan igual)
+METRIC_AVERAGE = "macro"
+# Origen de cada métrica en la tabla larga: validación cruzada o test
+CV_ORIGIN = "cv"
+TEST_ORIGIN = "test"
+# Columnas de la tabla larga de métricas, en orden
+METRICS_TABLE_COLUMNS = ("modelo", "metrica", "origen", "media", "desvio")
+# Nombres de los ejes de la matriz de confusión (filas y columnas)
+CONFUSION_AXES = ("real", "predicho")

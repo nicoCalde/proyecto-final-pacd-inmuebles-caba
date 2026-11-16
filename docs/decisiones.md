@@ -49,6 +49,11 @@
 | Grilla de RandomForest: 100 o 200 árboles, profundidad 20 o sin límite, hoja mínima de 1 o 5 | Contrasta árboles acotados con árboles completos: 8 combinaciones, en unos 3 minutos de entrenamiento. |
 | El RandomForest ganador es la configuración sin restricciones | El F1 de CV se mide en datos que cada fold no vio, así que no es sobreajuste a train. La comparación CV vs test de la Etapa 7 lo confirma. |
 | Modelo guardado con compresión (`compress=3`) y fuera de git | El RandomForest pasa de 1,2 GB a unos 200 MB. Aun así supera el límite de GitHub, por eso se regenera con el script de entrenamiento. |
+| Métricas de test con promedio macro y orden de etiquetas explícito | Es coherente con el F1 macro de la CV, así que ambas se pueden comparar, y las tres clases pesan igual. |
+| Test usado una sola vez, para todos los modelos (línea base incluida) | Con test no se elige nada, solo se confirma. La línea base da el piso de referencia. |
+| Comparación CV vs test: RandomForest 0,729 → 0,739, LogisticRegression 0,610 → 0,610, línea base 0,167 → 0,167 | Test confirma la CV: no hay sobreajuste. |
+| Reporte por clase | Muestra que "Estándar" es la clase más difícil (F1 0,640 contra ~0,79 de las otras): al ser el tercil del medio, limita con las otras dos. |
+| Tabla larga de métricas (modelo, métrica, origen, media, desvío) | Tiene la forma de la tabla `metricas` de la base de datos y permite comparar CV y test en una sola consulta. |
 | Precisión macro del `DummyClassifier` = 0 en las clases que nunca predice | Siempre predice la misma clase, así que la precisión de las otras dos queda indefinida y scikit-learn la toma como 0 (con una advertencia esperable). |
 | Semilla fija (42) | Resultados reproducibles. |
 

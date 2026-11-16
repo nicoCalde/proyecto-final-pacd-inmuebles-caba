@@ -185,7 +185,7 @@ CLEAN_DEFAULTS = {
 }
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def make_clean():
     """Devolver una fábrica de tablas limpias con una fila por cada ``override``.
 
@@ -212,7 +212,7 @@ LEARNABLE_BARRIOS = {
 }
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def learnable_clean(make_clean):
     """Devolver una tabla limpia de 200 filas cuyo precio por m² es aprendible.
 
