@@ -17,3 +17,6 @@ __pycache__/
 # Configuración local de Claude Code
 .claude/settings.local.json
 CLAUDE.local.md
+
+# Modelos entrenados (un RandomForest puede superar el límite de 100 MB de GitHub)
+models/

@@ -4,9 +4,11 @@ Las pruebas nunca leen ``datasets/``; en su lugar se escriben con pyshp
 shapefiles de puntos con pocas filas en el directorio temporal de cada prueba.
 Los esquemas copian el orden, los tipos y los tamaños de los ``.dbf`` reales.
 Para la limpieza se arman en memoria tablas con la forma de ``load_raw`` y,
-para el preprocesamiento, tablas con la forma de la salida de ``clean``.
+para el preprocesamiento y el modelado, tablas con la forma de la salida de
+``clean``.
 """
 
+import numpy as np
 import pandas as pd
 import pytest
 import shapefile
@@ -199,3 +201,49 @@ def make_clean():
         return pd.DataFrame(rows, columns=list(CLEAN_COLUMNS))
 
     return _make
+
+
+# Barrios del dataset aprendible: (comuna, precio base en USD/m²).
+LEARNABLE_BARRIOS = {
+    "VILLA LUGANO": (8.0, 1200.0),
+    "BOCA": (4.0, 1800.0),
+    "CABALLITO": (6.0, 2600.0),
+    "PALERMO": (14.0, 3400.0),
+}
+
+
+@pytest.fixture
+def learnable_clean(make_clean):
+    """Devolver una tabla limpia de 200 filas cuyo precio por m² es aprendible.
+
+    El precio depende del barrio, la latitud y la superficie, con poco ruido,
+    de modo que un modelo real supera al baseline. Algunas features tienen NaN
+    para ejercitar la imputación del ``Pipeline``.
+    """
+    rng = np.random.default_rng(0)
+    n_rows = 200
+    barrios = rng.choice(list(LEARNABLE_BARRIOS), size=n_rows)
+    latitud = rng.uniform(-34.70, -34.55, size=n_rows)
+    m2total = rng.uniform(30.0, 150.0, size=n_rows)
+    noise = rng.normal(0.0, 50.0, size=n_rows)
+    overrides = []
+    for i, barrio in enumerate(barrios):
+        comuna, base = LEARNABLE_BARRIOS[barrio]
+        price = base + 4000.0 * (latitud[i] + 34.70) - 3.0 * m2total[i] + noise[i]
+        overrides.append(
+            {
+                "barrio": barrio,
+                "comuna": comuna,
+                "latitud": latitud[i],
+                "m2total": m2total[i],
+                "m2cub": 0.9 * m2total[i],
+                "antig": float(rng.integers(0, 60)),
+                "preciousdm": price,
+                "preciousd": price * m2total[i],
+            }
+        )
+    df = make_clean(overrides)
+    df.loc[::25, "antig"] = np.nan
+    df.loc[3::40, "m2cub"] = np.nan
+    df.loc[7::50, "comuna"] = np.nan
+    return df

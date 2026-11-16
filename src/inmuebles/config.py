@@ -189,3 +189,38 @@ FEATURE_COLUMNS = NUMERIC_FEATURES + CATEGORICAL_FEATURES
 
 # Columnas derivadas del precio (el target): nunca se usan como features
 LEAKAGE_COLUMNS = ("preciousd", "precioars", TARGET_SOURCE, "precioarsm", "cambio")
+
+# Partición estratificada por deciles auxiliares del precio por m²
+STRATIFY_BINS = 10
+
+# Validación cruzada estratificada y métricas de la consigna (macro: 3 clases)
+CV_FOLDS = 5
+SCORING = {
+    "accuracy": "accuracy",
+    "precision": "precision_macro",
+    "recall": "recall_macro",
+    "f1": "f1_macro",
+}
+# Métrica con la que se elige el mejor modelo y se reajusta la grilla
+REFIT_METRIC = "f1"
+
+# Nombre del baseline (DummyClassifier); no compite en la selección
+BASELINE_NAME = "dummy"
+# Iteraciones máximas de la regresión logística (asegura convergencia)
+LOGREG_MAX_ITER = 1000
+
+# Grillas de hiperparámetros sobre el paso "clf" del Pipeline
+MODEL_GRIDS = {
+    "logistic_regression": {"clf__C": [0.01, 0.1, 1.0, 10.0]},
+    "random_forest": {
+        "clf__n_estimators": [100, 200],
+        "clf__max_depth": [20, None],
+        "clf__min_samples_leaf": [1, 5],
+    },
+}
+
+# Modelo final serializado con joblib (carpeta ignorada por git)
+MODELS_DIR = PROJECT_ROOT / "models"
+MODEL_PATH = MODELS_DIR / "mejor_modelo.joblib"
+# Nivel de compresión de joblib: el RandomForest pasa de ~1,2 GB a ~200 MB
+MODEL_COMPRESSION = 3
