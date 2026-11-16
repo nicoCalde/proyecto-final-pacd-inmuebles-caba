@@ -47,6 +47,18 @@
 | Guardar el pipeline entrenado con joblib | Permite reutilizar el modelo sin reentrenarlo. |
 | Semilla fija (42) | Resultados reproducibles. |
 
+## Preprocesamiento
+
+| Decisión | Motivo |
+| --- | --- |
+| Features: antigüedad, m² totales y cubiertos, ambientes, baños, latitud, longitud, barrio y comuna | Son los atributos del inmueble y su ubicación que pide la consigna, sin ninguna columna de precio. |
+| Imputar las numéricas con la mediana | Es robusta a valores extremos. La media se sesga con las colas de m² y antigüedad. |
+| Imputar las categóricas con la moda | Hay muy pocos nulos (2 en barrio y 4 en comuna), así que el sesgo es despreciable. |
+| `StandardScaler` en las numéricas | La regresión logística con regularización es sensible a la escala de las variables. |
+| One-hot encoding con `handle_unknown="ignore"` | Un barrio o una comuna que no aparezca en train se codifica como ceros en lugar de hacer fallar el modelo. |
+| `comuna` como categórica y no numérica | Es un código de distrito sin orden. Además no es redundante con barrio: 8 barrios abarcan más de una comuna. |
+| Preprocesador entregado sin ajustar | Se ajusta dentro del `Pipeline` del modelo y solo con train, así no se filtra información de test. |
+
 ## Visualización y presentación
 
 | Decisión | Motivo |

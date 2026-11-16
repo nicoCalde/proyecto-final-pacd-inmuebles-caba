@@ -172,3 +172,20 @@ TARGET_COLUMN = "segmento"
 SEGMENT_LABELS = ("Accesible", "Estándar", "Alta")
 # Cuantiles que separan los segmentos (terciles), ajustados solo sobre train
 SEGMENT_QUANTILES = (1 / 3, 2 / 3)
+
+# Features del modelo: numéricas (se imputan y escalan) y categóricas
+NUMERIC_FEATURES = (
+    "antig",
+    "m2total",
+    "m2cub",
+    "ambientes",
+    "banos",
+    "latitud",
+    "longitud",
+)
+# comuna es un código de distrito: categórica, no ordinal
+CATEGORICAL_FEATURES = ("barrio", "comuna")
+FEATURE_COLUMNS = NUMERIC_FEATURES + CATEGORICAL_FEATURES
+
+# Columnas derivadas del precio (el target): nunca se usan como features
+LEAKAGE_COLUMNS = ("preciousd", "precioars", TARGET_SOURCE, "precioarsm", "cambio")
